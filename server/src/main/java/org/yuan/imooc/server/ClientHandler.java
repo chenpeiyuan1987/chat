@@ -11,15 +11,21 @@ public class ClientHandler {
     private final Socket socket;
     private final ClientReadHandler readHandler;
     private final ClientSendHandler sendHandler;
-    private final CloseNotify closeNotify;
+    private final ClientHandlerCallback callback;
+    private final String clientInfo;
 
-    public ClientHandler(Socket socket, CloseNotify closeNotify) throws IOException {
+
+    public ClientHandler(Socket socket, ClientHandlerCallback callback) throws IOException {
         this.socket = socket;
         this.readHandler = new ClientReadHandler(socket.getInputStream());
         this.sendHandler = new ClientSendHandler(socket.getOutputStream());
-        this.closeNotify = closeNotify;
+        this.callback = callback;
+        this.clientInfo = String.format("%s:%s", socket.getInetAddress(), socket.getPort());
+        System.out.printf("新客户端连接: %s\n", clientInfo);
+    }
 
-        System.out.printf("新客户端连接: %s:%s\n", socket.getInetAddress(), socket.getPort());
+    public String getClientInfo() {
+        return clientInfo;
     }
 
     public void exit() {
@@ -39,11 +45,23 @@ public class ClientHandler {
 
     public void exitBySelf() {
         exit();
-        closeNotify.onSelfClosed(this);
+        callback.onSelfClosed(this);
     }
 
-    public interface CloseNotify {
+    public interface ClientHandlerCallback {
+        /**
+         * 自身关闭通知
+         * @param handler
+         */
         void onSelfClosed(ClientHandler handler);
+
+        /**
+         * 收到消息通知
+         * @param handler
+         * @param msg
+         */
+        void onNewMessageArrived(ClientHandler handler, String msg);
+
     }
 
     class ClientReadHandler extends Thread {
@@ -65,7 +83,7 @@ public class ClientHandler {
                         ClientHandler.this.exitBySelf();
                         break;
                     }
-                    System.out.println(line);
+                    callback.onNewMessageArrived(ClientHandler.this, line);
                 } while(!done);
             }
             catch(Exception ex) {

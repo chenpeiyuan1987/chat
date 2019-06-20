@@ -8,7 +8,7 @@ import java.net.Socket;
 import java.util.ArrayList;
 import java.util.List;
 
-public class TCPServer {
+public class TCPServer implements ClientHandler.ClientHandlerCallback {
     private final int port;
     private ClientListener listener;
     private List<ClientHandler> handlerList = new ArrayList<>();
@@ -37,10 +37,20 @@ public class TCPServer {
      * 广播
      * @param line
      */
-    public void broadcast(String line) {
+    public synchronized void broadcast(String line) {
         for(ClientHandler handler : handlerList) {
             handler.send(line);
         }
+    }
+
+    @Override
+    public void onSelfClosed(ClientHandler handler) {
+        handlerList.remove(handler);
+    }
+
+    @Override
+    public void onNewMessageArrived(ClientHandler handler, String msg) {
+        System.out.println("Received-" + handler.getClientInfo() + ":" + msg);
     }
 
     /**
@@ -51,10 +61,12 @@ public class TCPServer {
             listener.exit();
         }
 
-        for(ClientHandler handler : handlerList) {
-            handler.exit();
+        synchronized(TCPServer.this) {
+            for (ClientHandler handler : handlerList) {
+                handler.exit();
+            }
+            handlerList.clear();
         }
-        handlerList.clear();
     }
 
     private class ClientListener extends Thread {
@@ -80,14 +92,11 @@ public class TCPServer {
                 }
 
                 try {
-                    ClientHandler handler = new ClientHandler(client, new ClientHandler.CloseNotify() {
-                        @Override
-                        public void onSelfClosed(ClientHandler handler) {
-                            handlerList.remove(handler);
-                        }
-                    });
+                    ClientHandler handler = new ClientHandler(client, TCPServer.this);
                     handler.readToPrint();
-                    handlerList.add(handler);
+                    synchronized(TCPServer.this) {
+                        handlerList.add(handler);
+                    }
                 }
                 catch(IOException ex) {
                     ex.printStackTrace();

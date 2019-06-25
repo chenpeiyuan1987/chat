@@ -120,6 +120,9 @@ public class ClientHandler {
         }
 
         void send(String str) {
+            if (done) {
+                return;
+            }
             service.execute(new SendRunnable(str));
         }
 

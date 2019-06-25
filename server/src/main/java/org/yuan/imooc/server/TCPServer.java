@@ -7,14 +7,18 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class TCPServer implements ClientHandler.ClientHandlerCallback {
     private final int port;
     private ClientListener listener;
     private List<ClientHandler> handlerList = new ArrayList<>();
+    private final ExecutorService service;
 
     public TCPServer(int port) {
         this.port = port;
+        this.service = Executors.newSingleThreadExecutor();
     }
 
     /**
@@ -49,8 +53,21 @@ public class TCPServer implements ClientHandler.ClientHandlerCallback {
     }
 
     @Override
-    public void onNewMessageArrived(ClientHandler handler, String msg) {
+    public void onNewMessageArrived(final ClientHandler handler, final String msg) {
+        // 打印到屏幕
         System.out.println("Received-" + handler.getClientInfo() + ":" + msg);
+
+        // 异步提交转发任务
+        service.execute(() -> {
+            synchronized (TCPServer.this) {
+                for (ClientHandler item : handlerList) {
+                    if (item.equals(handler)) {
+                        continue;
+                    }
+                    item.send(msg);
+                }
+            }
+        });
     }
 
     /**
@@ -67,6 +84,8 @@ public class TCPServer implements ClientHandler.ClientHandlerCallback {
             }
             handlerList.clear();
         }
+
+        service.shutdownNow();
     }
 
     private class ClientListener extends Thread {

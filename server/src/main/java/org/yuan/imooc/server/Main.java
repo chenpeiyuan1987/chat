@@ -20,7 +20,7 @@ public class Main {
         do {
             line = scan.nextLine();
             server.broadcast(line);
-        } while("bye".equalsIgnoreCase(line));
+        } while(!"bye".equalsIgnoreCase(line));
 
         server.stop();
     }

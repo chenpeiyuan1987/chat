@@ -7,11 +7,29 @@ import java.net.Inet4Address;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
-import java.util.Scanner;
 
 public class TCPClient {
+    private final Socket socket;
+    private final ReadHandler readHandler;
+    private final PrintStream printStream;
 
-    public static void linkWith(String addr, int port) throws IOException {
+    public TCPClient(Socket socket, ReadHandler readHandler) throws IOException {
+        this.socket = socket;
+        this.readHandler = readHandler;
+        this.printStream = new PrintStream(socket.getOutputStream());
+    }
+
+    public void exit() {
+        readHandler.exit();
+        CloseUtils.close(socket);
+        CloseUtils.close(printStream);
+    }
+
+    public void send(String line) {
+        printStream.println(line);
+    }
+
+    public static TCPClient startWith(String addr, int port) throws IOException {
         Socket socket = new Socket();
 
         socket.setSoTimeout(3000);
@@ -25,31 +43,14 @@ public class TCPClient {
             ReadHandler handler = new ReadHandler(socket.getInputStream());
             handler.start();
 
-            write(socket);
-
-            handler.exit();
+            return new TCPClient(socket, handler);
         }
         catch(Exception ex) {
-            System.out.println("异常关闭");
+            System.out.println("连接异常");
+            CloseUtils.close(socket);
         }
 
-        socket.close();
-        System.out.println("客户端已退出");
-    }
-
-    public static void write(Socket client) throws IOException {
-        Scanner scan = new Scanner(System.in);
-        PrintStream stream = new PrintStream(client.getOutputStream());
-
-        do {
-            String line = scan.nextLine();
-            stream.println(line);
-            if("bye".equalsIgnoreCase(line)) {
-                break;
-            }
-        } while(true);
-
-        stream.close();
+        return null;
     }
 
     static class ReadHandler extends Thread {

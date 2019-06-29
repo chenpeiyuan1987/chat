@@ -5,7 +5,7 @@ import org.yuan.imooc.common.TCPConstants;
 import java.io.IOException;
 import java.util.Scanner;
 
-public class Main {
+public class Server {
 
     public static void main(String[] args) throws IOException {
         TCPServer server = new TCPServer(TCPConstants.PORT_SERVER);

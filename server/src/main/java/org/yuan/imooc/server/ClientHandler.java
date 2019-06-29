@@ -65,7 +65,7 @@ public class ClientHandler {
     }
 
     class ClientReadHandler extends Thread {
-        private boolean done = true;
+        private boolean done = false;
         private final InputStream stream;
 
         public ClientReadHandler(InputStream stream) {

@@ -5,7 +5,7 @@ import org.yuan.imooc.common.TCPConstants;
 import java.io.IOException;
 import java.util.Scanner;
 
-public class Main {
+public class Client {
 
     public static void main(String[] args) {
         TCPClient client = null;

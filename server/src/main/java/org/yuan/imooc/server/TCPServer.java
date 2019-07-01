@@ -3,9 +3,13 @@ package org.yuan.imooc.server;
 import org.yuan.imooc.common.CloseUtils;
 
 import java.io.IOException;
-import java.net.ServerSocket;
-import java.net.Socket;
+import java.net.InetSocketAddress;
+import java.nio.channels.SelectionKey;
+import java.nio.channels.Selector;
+import java.nio.channels.ServerSocketChannel;
+import java.nio.channels.SocketChannel;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -15,6 +19,8 @@ public class TCPServer implements ClientHandler.ClientHandlerCallback {
     private ClientListener listener;
     private List<ClientHandler> handlerList = new ArrayList<>();
     private final ExecutorService service;
+    private Selector selector;
+    private ServerSocketChannel server;
 
     public TCPServer(int port) {
         this.port = port;
@@ -27,7 +33,18 @@ public class TCPServer implements ClientHandler.ClientHandlerCallback {
      */
     public boolean start() {
         try {
-            listener = new ClientListener(port);
+            selector = Selector.open();
+            server = ServerSocketChannel.open();
+            // 设置非阻塞
+            server.configureBlocking(false);
+            // 绑定本地端口
+            server.socket().bind(new InetSocketAddress(port));
+            // 注册客户端连接到达监听
+            server.register(selector, SelectionKey.OP_ACCEPT);
+
+            System.out.println("服务器信息: " + server.getLocalAddress().toString());
+
+            listener = new ClientListener();
             listener.start();
         }
         catch(IOException ex) {
@@ -78,6 +95,8 @@ public class TCPServer implements ClientHandler.ClientHandlerCallback {
             listener.exit();
         }
 
+        CloseUtils.close(server, selector);
+
         synchronized(TCPServer.this) {
             for (ClientHandler handler : handlerList) {
                 handler.exit();
@@ -90,36 +109,50 @@ public class TCPServer implements ClientHandler.ClientHandlerCallback {
 
     private class ClientListener extends Thread {
         private boolean done = false;
-        private ServerSocket server;
-
-        public ClientListener(int port) throws IOException {
-            server = new ServerSocket(port);
-            System.out.printf("服务器信息: %s:%s\n", server.getInetAddress(), server.getLocalPort());
-        }
 
         @Override
         public void run() {
+            Selector selector = TCPServer.this.selector;
             System.out.println("服务器已就绪");
 
             do {
-                Socket client;
                 try {
-                    client = server.accept();
-                }
-                catch(IOException ex) {
-                    continue;
-                }
+                    if (selector.select() == 0) {
+                        if (done) {
+                            break;
+                        }
+                        continue;
+                    }
 
-                try {
-                    ClientHandler handler = new ClientHandler(client, TCPServer.this);
-                    handler.readToPrint();
-                    synchronized(TCPServer.this) {
-                        handlerList.add(handler);
+                    Iterator<SelectionKey> iterator = selector.selectedKeys().iterator();
+                    while (iterator.hasNext()) {
+                        if (done) {
+                            break;
+                        }
+
+                        SelectionKey key = iterator.next();
+                        iterator.remove();
+
+                        if (key.isAcceptable()) {
+                            ServerSocketChannel server = (ServerSocketChannel) key.channel();
+                            SocketChannel client = server.accept();
+
+                            try {
+                                ClientHandler handler = new ClientHandler(client, TCPServer.this);
+                                handler.readToPrint();
+                                synchronized (TCPServer.this) {
+                                    handlerList.add(handler);
+                                }
+                            }
+                            catch (IOException ex) {
+                                ex.printStackTrace();
+                                System.out.println("客户端连接异常：" + ex.getMessage());
+                            }
+                        }
                     }
                 }
                 catch(IOException ex) {
                     ex.printStackTrace();
-                    System.out.println("客户端连接异常: " + ex.getMessage());
                 }
             } while(!done);
 
@@ -128,7 +161,8 @@ public class TCPServer implements ClientHandler.ClientHandlerCallback {
 
         void exit() {
             done = true;
-            CloseUtils.close(server);
+            // 唤醒阻塞
+            selector.wakeup();
         }
     }
 }

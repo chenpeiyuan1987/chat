@@ -6,7 +6,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
-public class MainTest {
+public class ClientTest {
     private static boolean done;
 
     public static void main(String[] args) throws IOException {
